@@ -74,6 +74,10 @@ module.exports = {
           limit: 10000,
           name: utils.assetsPath('fonts/[name].[hash:7].[ext]')
         }
+      },
+      {
+        test: /\.tsv$/, // load all .csv, .dsv, .tsv files with dsv-loader
+        use: ['dsv-loader?delimiter=\t'] // or dsv-loader?delimiter=,
       }
     ]
   },
