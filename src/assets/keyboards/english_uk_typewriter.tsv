@@ -30,7 +30,7 @@ y	F3	2	6.5	Y	right-separation
 -	E4	1	11	-	
 =	F4	1	12	=	
 u	F#4	2	7.5	U	left-separation
-I	G4	2	8.5	I	
+i	G4	2	8.5	I	
 o	G#4	2	9.5	O	
 p	A4	2	10.5	P	
 [	A#4	2	11.5	[	
@@ -44,7 +44,7 @@ l	D5	3	9.75	L
 n	F#5	4	7.25	N	left-separation
 m	G5	4	8.25	M	
 ,	G#5	4	9.25	<	
-0	A5	4	10.25	>	
+.	A5	4	10.25	>	
 /	A#5	4	11.25	/	
 ArrowLeft	B5	5	13.25	←	
 ArrowUp	C6	4	14.25	↑	
