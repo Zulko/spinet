@@ -8,6 +8,8 @@
         width="0.8" height="0.8"
         :x="parseFloat(key.xPosition) + 0.1"
         :y="parseFloat(key.yPosition) + 0.1"
+        rx="0.05"
+        ry="0.05"
       )
       text.small(
         :x="parseFloat(key.xPosition) + 0.5"
@@ -51,12 +53,14 @@ export default {
   },
   methods: {
     onKeyDown (evt) {
+      evt.preventDefault()
       this.pressedKeys.add(evt.key)
       this.keySounds[evt.key].play()
       this.lastPressed = evt.key
       this.$forceUpdate()
     },
     onKeyUp (evt) {
+      evt.preventDefault()
       this.pressedKeys.delete(evt.key)
       this.keySounds[evt.key].stop()
       this.$forceUpdate()
@@ -139,8 +143,6 @@ svg.keyboard {
       stroke-width: 0.02;
       stroke: #888;
       fill:#eee;
-      rx:0.05;
-      ry:0.05;
     }
 
     &.sharp {
