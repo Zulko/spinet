@@ -14,34 +14,65 @@
       text.small(
         :x="parseFloat(key.xPosition) + 0.5"
         :y="parseFloat(key.yPosition) + 0.65"
-      ) {{ keyDisplay === 'key' ? key.symbol : noteName(key.note).replace('#', '♯') }}
+      ) {{ keyDisplay(key) }}
 
+  select(v-model="keyDisplayMode")
+    option(value='key') Keyboard
+    option(value='note_sharp') Notes (♯)
+    option(value='note_bemol') Notes (♭)
+    option(value='none') None
+
+  select(v-model="synthesizer.source")
+    option(value='wave') wave
+    option(value='file') instrument
+
+  select(v-if="synthesizer.source === 'file'" v-model="synthesizer.options.instrument")
+    option(v-for='name in instrumentNames', :key='name', :value='name') {{ name.replace(/_/g, ' ')}}
 </template>
 
 <script>
 import Pizzicato from 'pizzicato'
+import music from '../music'
+console.log(music)
 const keyboardTypes = {
   english_uk_typewriter: require('../assets/keyboards/english_uk_typewriter.tsv')
 }
+
+const instrumentNames = require('../assets/instruments_names.tsv').map(e => e.name)
 
 export default {
   name: 'spinet',
   data () {
     return {
       keySounds: {},
-      keyDisplay: 'note',
+      keyDisplayMode: 'note_sharp',
       keyboardType: 'english_uk_typewriter',
       keyboardTypes: keyboardTypes,
       lastPressed: '',
       pressedKeys: new Set([]),
-      soundParameters: {
-        waveType: 'triangle',
-        attack: 0,
-        reverb: {
-          time: 0.01,
-          decay: 0.01,
-          reverse: true,
-          mix: 0.8
+      instrumentNames: instrumentNames,
+      synthesizer: {
+        source: 'wave',
+        options: {
+          type: 'triangle',
+          instrument: 'clavinet',
+          path: function (note, instrument) {
+            note = music.enharmonics[music.noteWithoutScale(note)] + music.noteScale(note)
+            var url = `https://cdn.rawgit.com/gleitz/midi-js-soundfonts/gh-pages/FluidR3_GM/${instrument}-mp3/${note}.mp3`
+            console.log(url)
+            return url
+          },
+          loop: false,
+          attack: 0,
+          relase: 0.2
+        },
+        effects: {
+          reverb: {
+            time: 0.01,
+            decay: 0.01,
+            reverse: true,
+            mix: 0.8
+          }
         }
       }
     }
@@ -54,6 +85,9 @@ export default {
   methods: {
     onKeyDown (evt) {
       evt.preventDefault()
+      if (this.pressedKeys.has(evt.key)) {
+        return
+      }
       this.pressedKeys.add(evt.key)
       this.keySounds[evt.key].play()
       this.lastPressed = evt.key
@@ -68,34 +102,26 @@ export default {
     bindKeys () {
       var self = this
       this.keyboard.map(function (key) {
-        console.log(key)
-        var freq = self.note2freq(key.note)
-        var sound = self.generateSound(freq)
-        self.keySounds[key.key] = sound
+        self.keySounds[key.key] = self.createSound(key.note)
       })
     },
-    noteName (note) {
-      return note.slice(0, note.length - 1)
-    },
-    noteScale (note) {
-      return parseInt(note.slice(note.length - 1, note.length))
-    },
-    note2freq (note) {
-      var index = 'C C# D D# E F F# G G# A A# B'.split(' ').indexOf(this.noteName(note))
-      var noteNumber = 12 * this.noteScale(note) + index
-      return 440 * Math.pow(2, (noteNumber - 49) / 12)
-    },
-    generateSound (freq) {
-      var snd = new Pizzicato.Sound({
-        source: 'wave',
-        options: {
-          type: this.soundParameters.waveType,
-          frequency: freq,
-          attack: this.soundParameters.attack
-        }
+    createSound (note) {
+      var synth = this.synthesizer
+      var options = Object.assign({}, synth.options)
+      if (synth.source === 'wave') {
+        options.frequency = music.noteFrequency(note)
+      } else if (synth.source === 'file') {
+        options.path = options.path(note, options.instrument)
+      }
+      var sound = new Pizzicato.Sound({
+        source: synth.source,
+        options
       })
-      snd.addEffect(new Pizzicato.Effects.Reverb(this.soundParameters.reverb))
-      return snd
+      if (synth.effects.reverb) {
+        var reverb = new Pizzicato.Effects.Reverb(synth.effects.reverb)
+        sound.addEffect(reverb)
+      }
+      return sound
     },
     keyClass (key) {
       return [
@@ -107,6 +133,14 @@ export default {
           pressed: this.pressedKeys.has(key.key)
         }
       ]
+    },
+    keyDisplay (key) {
+      return {
+        'none': '',
+        'key': key.symbol,
+        'note_sharp': music.noteWithoutScale(key.note).replace('#', '♯'),
+        'note_bemol': music.enharmonics[music.noteWithoutScale(key.note)].replace('b', '♭')
+      }[this.keyDisplayMode]
     }
   },
   mounted () {
@@ -117,6 +151,13 @@ export default {
   watch: {
     pressedKeys (value) {
       console.log('keypress', value)
+    },
+    'synthesizer.source': function (value) {
+      this.bindKeys()
+    },
+    'synthesizer.options.instrument': function (value) {
+      console.log('binding')
+      this.bindKeys()
     }
   }
 }
