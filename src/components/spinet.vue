@@ -22,46 +22,58 @@
     option(value='note_bemol') Notes (♭)
     option(value='none') None
 
-  select(v-model="synthesizer.source")
-    option(value='wave') wave
-    option(value='file') instrument
+  select(v-model="synthesizer")
+    option(value='wave') Wave
+    option(value='soundfont') Sounfont
 
-  select(v-if="synthesizer.source === 'file'" v-model="synthesizer.options.instrument")
-    option(v-for='name in instrumentNames', :key='name', :value='name') {{ name.replace(/_/g, ' ')}}
+  select(v-model="soundfont" v-if="synthesizer === 'soundfont'")
+    option(value='fluid') Fluid
+    option(value='musyng') Musyng
+
+  select(v-if="synthesizer === 'soundfont'" v-model="instrument")
+    option(v-for='name in soundfontNames[soundfont]', :key='name', :value='name') {{ name.replace(/_/g, ' ')}}
 </template>
 
 <script>
 import Pizzicato from 'pizzicato'
-import music from '../music'
-console.log(music)
+const noteParser = require('note-parser')
+const sfPlayer = require('soundfont-player')
+const soundfontNames = {
+  fluid: require('soundfont-player/names/fluidR3.json'),
+  musyng: require('soundfont-player/names/musyngkite.json')
+}
+
+const ac = new AudioContext()
+
+function enharmonic (note) {
+  var parsed = noteParser.parse(note)
+  return noteParser.build(parsed.step + parsed.alt, -1 * parsed.alt, parsed.oct)
+}
+
 const keyboardTypes = {
   english_uk_typewriter: require('../assets/keyboards/english_uk_typewriter.tsv')
 }
-
-const instrumentNames = require('../assets/instruments_names.tsv').map(e => e.name)
 
 export default {
   name: 'spinet',
   data () {
     return {
-      keySounds: {},
+      keyNotes: {},
+      noteSounds: {},
       keyDisplayMode: 'note_sharp',
       keyboardType: 'english_uk_typewriter',
       keyboardTypes: keyboardTypes,
       lastPressed: '',
       pressedKeys: new Set([]),
-      instrumentNames: instrumentNames,
-      synthesizer: {
+      playingNotes: new Set([]),
+      synthesizer: 'wave',
+      instrument: 'clavinet',
+      soundfont: 'fluid',
+      soundfontNames: soundfontNames,
+      waveParameters: {
         source: 'wave',
         options: {
           type: 'triangle',
-          instrument: 'clavinet',
-          path: function (note, instrument) {
-            note = music.enharmonics[music.noteWithoutScale(note)] + music.noteScale(note)
-            var url = `https://cdn.rawgit.com/gleitz/midi-js-soundfonts/gh-pages/FluidR3_GM/${instrument}-mp3/${note}.mp3`
-            console.log(url)
-            return url
-          },
           loop: false,
           attack: 0,
           relase: 0.2
@@ -88,28 +100,60 @@ export default {
       if (this.pressedKeys.has(evt.key)) {
         return
       }
-      this.pressedKeys.add(evt.key)
-      this.keySounds[evt.key].play()
       this.lastPressed = evt.key
+      this.pressedKeys.add(evt.key)
+      var note = this.keyNotes[evt.key]
+      if (this.playingNotes.has(note)) {
+        return
+      }
+      this.playingNotes.add(note)
+      this.noteSounds[note].play()
       this.$forceUpdate()
     },
     onKeyUp (evt) {
       evt.preventDefault()
       this.pressedKeys.delete(evt.key)
-      this.keySounds[evt.key].stop()
+      var note = this.keyNotes[evt.key]
+      this.noteSounds[note].stop()
+      this.playingNotes.delete(note)
       this.$forceUpdate()
     },
     bindKeys () {
       var self = this
       this.keyboard.map(function (key) {
-        self.keySounds[key.key] = self.createSound(key.note)
+        self.keyNotes[key.key] = key.note
       })
+    },
+    bindNotes () {
+      var self = this
+      if (this.synthesizer === 'soundfont') {
+        sfPlayer.instrument(ac, this.instrument, {soundfont: 'MusyngKite'}).then(function (instrument) {
+          self.instrumentSoundfont = instrument
+        })
+        this.keyboard.map(function (key) {
+          console.log(key.note)
+          self.noteSounds[key.note] = {
+            play () {
+              self.noteSounds[key.note].playing = self.instrumentSoundfont.play(key.note)
+            },
+            stop () { self.noteSounds[key.note].playing.stop() }
+          }
+        })
+      } else {
+        this.keyboard.map(function (key) {
+          var options = Object.assign({}, self.waveParameters.options)
+          options.frequency = noteParser.parse(key.note).freq
+          var sound = new Pizzicato.Sound({source: 'wave', options})
+          self.noteSounds[key.note] = sound
+        })
+      }
     },
     createSound (note) {
       var synth = this.synthesizer
       var options = Object.assign({}, synth.options)
       if (synth.source === 'wave') {
-        options.frequency = music.noteFrequency(note)
+        var parsedNote = noteParser.parse(note)
+        options.frequency = parsedNote.freq
       } else if (synth.source === 'file') {
         options.path = options.path(note, options.instrument)
       }
@@ -135,16 +179,18 @@ export default {
       ]
     },
     keyDisplay (key) {
+      var note = noteParser.parse(key.note)
       return {
         'none': '',
         'key': key.symbol,
-        'note_sharp': music.noteWithoutScale(key.note).replace('#', '♯'),
-        'note_bemol': music.enharmonics[music.noteWithoutScale(key.note)].replace('b', '♭')
+        'note_sharp': note.pc.replace('#', '♯'),
+        'note_bemol': enharmonic(note.pc).replace('b', '♭')
       }[this.keyDisplayMode]
     }
   },
   mounted () {
     this.bindKeys()
+    this.bindNotes()
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
   },
@@ -152,12 +198,14 @@ export default {
     pressedKeys (value) {
       console.log('keypress', value)
     },
-    'synthesizer.source': function (value) {
-      this.bindKeys()
+    synthesizer: {
+      deep: true,
+      handler (value) {
+        this.bindNotes()
+      }
     },
-    'synthesizer.options.instrument': function (value) {
-      console.log('binding')
-      this.bindKeys()
+    instrument (value) {
+      this.bindNotes()
     }
   }
 }

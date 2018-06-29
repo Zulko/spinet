@@ -11,10 +11,11 @@
     "build": "node build/build.js"
   },
   "dependencies": {
-    "axios": "^0.18.0",
+    "note-parser": "^2.0.1",
     "pizzicato": "^0.6.3",
     "pug": "^2.0.3",
     "request": "^2.87.0",
+    "soundfont-player": "^0.10.6",
     "vue": "^2.5.2",
     "vue-resource": "^1.5.1",
     "vue-router": "^3.0.1"
