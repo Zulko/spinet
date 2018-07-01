@@ -36,6 +36,7 @@
 
 <script>
 import Pizzicato from 'pizzicato'
+console.log(Pizzicato.context)
 const noteParser = require('note-parser')
 const sfPlayer = require('soundfont-player')
 const soundfontNames = {
@@ -43,7 +44,7 @@ const soundfontNames = {
   musyng: require('soundfont-player/names/musyngkite.json')
 }
 
-const ac = new AudioContext()
+const ac = new AudioContext({ latencyHint: 'interactive' })
 
 function enharmonic (note) {
   var parsed = noteParser.parse(note)
@@ -76,7 +77,7 @@ export default {
           type: 'triangle',
           loop: false,
           attack: 0,
-          relase: 0.2
+          release: 0.2
         },
         effects: {
           reverb: {
@@ -97,17 +98,18 @@ export default {
   methods: {
     onKeyDown (evt) {
       evt.preventDefault()
+      var note = this.keyNotes[evt.key]
+      if (this.playingNotes.has(note)) {
+        return
+      }
+      this.noteSounds[note].play()
+      this.playingNotes.add(note)
       if (this.pressedKeys.has(evt.key)) {
         return
       }
       this.lastPressed = evt.key
       this.pressedKeys.add(evt.key)
-      var note = this.keyNotes[evt.key]
-      if (this.playingNotes.has(note)) {
-        return
-      }
-      this.playingNotes.add(note)
-      this.noteSounds[note].play()
+
       this.$forceUpdate()
     },
     onKeyUp (evt) {
@@ -144,6 +146,10 @@ export default {
           var options = Object.assign({}, self.waveParameters.options)
           options.frequency = noteParser.parse(key.note).freq
           var sound = new Pizzicato.Sound({source: 'wave', options})
+          if (self.waveParameters.effects.reverb) {
+            var reverb = new Pizzicato.Effects.Reverb(self.waveParameters.effects.reverb)
+            sound.addEffect(reverb)
+          }
           self.noteSounds[key.note] = sound
         })
       }
